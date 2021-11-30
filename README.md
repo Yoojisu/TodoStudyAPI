@@ -1,4 +1,10 @@
-# TodoStudyAPI 기능
+# TodoStudyAPI 
+
+## 개요
+ - .NetCore 2.2 version
+ - TODO 기능을 사용하기 위한  
+
+ ## 기능
  1. 사용자
   - 생성
   - 삭제
