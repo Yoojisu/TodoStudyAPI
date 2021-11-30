@@ -29,7 +29,7 @@ namespace TodoStudy.Controllers
         [HttpGet]
         [Authorize]        
         [Description("목록 호출")]
-        public TodoListModel List([FromQuery] TodoFilter filter)
+        public TodoListModel List([FromQuery] TodoFilter filter, DateTimeOffset? date = null)
         {
             if (string.IsNullOrEmpty(Self.Id))
             {
@@ -38,8 +38,14 @@ namespace TodoStudy.Controllers
 
             var todos = DatabaseContext.Todo
                 .Include(t => t.User)
-                .Where(t => t.UserIndex == Self.Index)
+                .Where(t => t.UserIndex == Self.Index && t.CreateDate == DateTimeOffset.Now.DateTime)
                 .Where(t => !t.DeleteDate.HasValue);
+
+            if (date.HasValue)
+            {
+                todos = todos.Where(t => t.CreateDate == date);
+            }
+
 
             if (!string.IsNullOrEmpty(filter.Search))
             {
