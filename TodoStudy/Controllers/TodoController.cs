@@ -20,33 +20,34 @@ namespace TodoStudy.Controllers
     [ApiController]
     public class TodoController : BaseController
     {
-        public TodoController(TodoDBContext context): base(context)
+        public TodoController(TodoDBContext context) : base(context)
         {
         }
 
         // 생성, 수정(체크, 글 수정), 삭제, 리스트(검색, 페이지네이션)
-
         [HttpGet]
-        [Authorize]        
+        [Authorize]
         [Description("목록 호출")]
-        public TodoListModel List([FromQuery] TodoFilter filter, DateTimeOffset? date = null)
+        public TodoListModel List([FromQuery] TodoFilter filter, DateTime? date = null)
         {
             if (string.IsNullOrEmpty(Self.Id))
             {
                 throw new NotFoundException("로그인 필요");
             }
 
+            // todo 리스트 조회 
             var todos = DatabaseContext.Todo
                 .Include(t => t.User)
-                .Where(t => t.UserIndex == Self.Index && t.CreateDate == DateTimeOffset.Now.DateTime)
+                .Where(t => t.UserIndex == Self.Index)
                 .Where(t => !t.DeleteDate.HasValue);
 
+            // 날짜조회
             if (date.HasValue)
             {
-                todos = todos.Where(t => t.CreateDate == date);
+                todos = todos.Where(t => t.CreateDate.Date.ToShortDateString() == date.Value.ToShortDateString());
             }
 
-
+            // 키워드 검색
             if (!string.IsNullOrEmpty(filter.Search))
             {
                 filter.Search = filter.Search.ToLower();
@@ -54,13 +55,14 @@ namespace TodoStudy.Controllers
                 todos = todos.Where(t => t.Contents.ToLower().Contains(filter.Search));
             }
 
-            return new TodoListModel() 
-            { 
+            return new TodoListModel()
+            {
                 TodoList = todos
                 .Skip(filter.Skip)
                 .Take(filter.Take)
-                .Select(t=> new TodoModel.Response(t))
-                .ToList(),
+                .Select(t => new TodoModel.Response(t))
+                .ToList()
+                .OrderByDescending(t => t.CreateDate),
                 TotalCount = todos.Count()
             };
         }
@@ -73,18 +75,18 @@ namespace TodoStudy.Controllers
         {
             if (Self == null)
             {
-               throw new BadRequestException("로그인이 필요합니다.");
+                throw new BadRequestException("로그인이 필요합니다.");
 
             }
 
             var todo = new Todo(model, Self);
-            
-            if(todo.Contents == null)
+
+            if (todo.Contents == null)
             {
                 throw new BadRequestException("할 일을 입력해 주세요.");
             }
 
-            using(var tran = DatabaseContext.Database.BeginTransaction())
+            using (var tran = DatabaseContext.Database.BeginTransaction())
             {
                 DatabaseContext.Todo.Add(todo);
                 DatabaseContext.SaveChanges();
@@ -92,6 +94,34 @@ namespace TodoStudy.Controllers
             }
 
             return new TodoModel.Response(todo);
+        }
+
+        [HttpPost("{index}")]
+        [Authorize]
+        [Description("할 일을 수정")]
+        public TodoModel.Response Update(int index, TodoModel.Create model)
+        {
+            var todo = DatabaseContext.Todo
+                .Where(t => !t.DeleteDate.HasValue)
+                .SingleOrDefault(t => t.Index == index);
+
+            if (todo == null)
+            {
+                throw new NotFoundException("Todo가 존재하지 않습니다.");
+            }
+
+            if (!string.IsNullOrEmpty(model.Contents) && model.Contents != todo.Contents)
+            {
+                todo.Contents = model.Contents;
+            }
+
+            if (model.IsChecked != todo.IsChecked)
+            {
+                todo.IsChecked = model.IsChecked;
+            }
+
+            return null;
+
         }
 
         [HttpDelete("{index}")]
@@ -104,14 +134,14 @@ namespace TodoStudy.Controllers
                 .Where(t => !t.DeleteDate.HasValue)
                 .SingleOrDefault(t => t.Index == index);
 
-            if(todo == null)
+            if (todo == null)
             {
                 throw new NotFoundException("할 일이 존재하지 않습니다.");
             }
 
             todo.DeleteDate = DateTime.Now;
 
-            using(var tran = DatabaseContext.Database.BeginTransaction())
+            using (var tran = DatabaseContext.Database.BeginTransaction())
             {
                 DatabaseContext.Todo.Update(todo);
                 DatabaseContext.SaveChanges();
